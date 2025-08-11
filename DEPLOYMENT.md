@@ -28,7 +28,7 @@ git push origin main
 ### 3. Environment Variables
 In the Render dashboard, add these environment variables:
 - `GEMINI_API_KEY`: Your Google Gemini API key
-- `GEMINI_MODEL`: `gemini-2.5-flash-lite`
+- `GEMINI_MODEL`: `gemini-2.0-flash-lite`
 - `GEMINI_TEMPERATURE`: `0.1`
 
 ### 4. Deploy
