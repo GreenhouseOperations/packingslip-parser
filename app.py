@@ -21,12 +21,12 @@ CORS(app)
 
 # Configure Gemini AI
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash-lite')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-lite')
 GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.1'))
 
-# Rate limiting for Gemini 2.0 Flash Lite (30 RPM)
-RATE_LIMIT_RPM = 30
-RATE_LIMIT_INTERVAL = 60.0 / RATE_LIMIT_RPM  # 2 seconds between requests
+# Rate limiting for Gemini 2.5 Flash Lite (15 RPM)
+RATE_LIMIT_RPM = 15
+RATE_LIMIT_INTERVAL = 60.0 / RATE_LIMIT_RPM  # 4 seconds between requests
 
 if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == '':
     raise ValueError("GEMINI_API_KEY not found in .env file. Please add your API key.")
@@ -36,7 +36,7 @@ model = genai.GenerativeModel(GEMINI_MODEL)
 
 # Rate limiting mechanism
 class RateLimiter:
-    def __init__(self, max_calls_per_minute=30):
+    def __init__(self, max_calls_per_minute=15):
         self.max_calls = max_calls_per_minute
         self.calls = []
         self.lock = threading.Lock()
