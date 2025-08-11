@@ -73,20 +73,12 @@ function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <div className="logo">
-            <div className="logo-text">Greenhouse Operations</div>
-          </div>
-        </div>
-      </header>
-
       <div className="container">
         <div className="hero-section">
-          <h1>Packing Slip Parser</h1>
-          <p className="subtitle">Convert PDF packing slips to structured CSV data</p>
+          <h1>Costco Packing Slip to UPS WorldShip Converter</h1>
           <p className="description">
-            Upload your PDF packing slip and receive a properly formatted CSV file for your operations system.
+            Upload your Costco.ca packing slip PDF and get a UPS WorldShip-ready CSV file with 
+            customer details, addresses, and shipping information.
           </p>
         </div>
         
@@ -104,7 +96,7 @@ function App() {
               </div>
             ) : (
               <div className="drop-message">
-                <p>Drop your PDF file here</p>
+                <p>Drop your Costco.ca packing slip PDF here</p>
                 <p className="or-text">or</p>
                 <input
                   type="file"
@@ -114,7 +106,7 @@ function App() {
                   style={{ display: 'none' }}
                 />
                 <label htmlFor="file-input" className="file-button">
-                  Choose File
+                  Choose PDF File
                 </label>
               </div>
             )}
@@ -132,7 +124,7 @@ function App() {
                   Processing
                 </>
               ) : (
-                'Generate CSV'
+                'Generate UPS WorldShip CSV'
               )}
             </button>
             
@@ -145,6 +137,11 @@ function App() {
               </button>
             )}
           </div>
+        </div>
+        
+        {/* Watermark */}
+        <div className="watermark">
+          Made by Dawang
         </div>
       </div>
     </div>

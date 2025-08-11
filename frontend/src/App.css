@@ -17,84 +17,50 @@ body {
   padding: 0;
 }
 
-.header {
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 24px 0;
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 32px;
-  display: flex;
-  align-items: center;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo-text {
-  font-family: 'Playfair Display', serif;
-  font-size: 28px;
-  font-weight: 600;
-  color: #1f2937;
-  letter-spacing: -0.01em;
-}
-
 .container {
-  max-width: 600px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 80px 32px;
 }
 
 .hero-section {
   text-align: center;
-  margin-bottom: 64px;
+  margin-bottom: 48px;
 }
 
 h1 {
   font-family: 'Playfair Display', serif;
   color: #1f2937;
-  margin-bottom: 24px;
-  font-size: 3.5rem;
+  margin-bottom: 20px;
+  font-size: 2.8rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
 
-.subtitle {
-  color: #6b7280;
-  margin-bottom: 16px;
-  font-size: 1.125rem;
-  font-weight: 500;
-}
-
 .description {
-  color: #9ca3af;
+  color: #6b7280;
   margin-bottom: 0;
-  font-size: 1rem;
-  max-width: 480px;
+  font-size: 1.1rem;
+  max-width: 600px;
   margin-left: auto;
   margin-right: auto;
+  line-height: 1.6;
 }
 
 .upload-section {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  padding: 48px;
+  padding: 60px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .drop-zone {
   border: 2px dashed #d1d5db;
   border-radius: 8px;
-  padding: 64px 32px;
-  margin-bottom: 32px;
+  padding: 80px 32px;
+  margin-bottom: 40px;
   transition: all 0.2s ease;
   cursor: pointer;
   background: #f9fafb;
@@ -282,7 +248,27 @@ h1 {
   .container {
     padding: 40px 16px;
   }
-  
+}
+
+/* Watermark */
+.watermark {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  z-index: 1000;
+  opacity: 0.8;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+@media (max-width: 480px) {
   h1 {
     font-size: 2rem;
   }
