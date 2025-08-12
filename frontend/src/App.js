@@ -75,10 +75,10 @@ function App() {
     <div className="app">
       <div className="container">
         <div className="hero-section">
-          <h1>Costco Packing Slip to UPS WorldShip Converter</h1>
+          <h1>Packing Slip Parser</h1>
+          <p className="subtitle">Convert PDF packing slips to structured CSV data</p>
           <p className="description">
-            Upload your Costco.ca packing slip PDF and get a UPS WorldShip-ready CSV file with 
-            customer details, addresses, and shipping information.
+            Upload your PDF packing slip and receive a properly formatted CSV file for your operations system.
           </p>
         </div>
         
@@ -96,7 +96,7 @@ function App() {
               </div>
             ) : (
               <div className="drop-message">
-                <p>Drop your Costco.ca packing slip PDF here</p>
+                <p>Drop your PDF packing slip here</p>
                 <p className="or-text">or</p>
                 <input
                   type="file"
@@ -106,7 +106,7 @@ function App() {
                   style={{ display: 'none' }}
                 />
                 <label htmlFor="file-input" className="file-button">
-                  Choose PDF File
+                  Choose File
                 </label>
               </div>
             )}
@@ -124,7 +124,7 @@ function App() {
                   Processing
                 </>
               ) : (
-                'Generate UPS WorldShip CSV'
+                'Generate CSV'
               )}
             </button>
             
@@ -138,11 +138,11 @@ function App() {
             )}
           </div>
         </div>
-        
-        {/* Watermark */}
-        <div className="watermark">
-          Made by Dawang
-        </div>
+      </div>
+      
+      {/* Watermark */}
+      <div className="watermark">
+        Made by Dawang
       </div>
     </div>
   );
