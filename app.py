@@ -1,10 +1,10 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import pdfplumber
-import pandas as pd
 import io
 import json
 import os
+import csv
 from dotenv import load_dotenv
 import google.generativeai as genai
 import re
@@ -12,27 +12,91 @@ import time
 import threading
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
+import sys
+import traceback
+
+# Configure logging for Vercel
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stdout
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
+logger.info("Loading environment variables...")
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://packingslip-parser-frontend.vercel.app", "http://localhost:3000"])
+logger.info("Flask app initialized with CORS")
+
+# Global error handler
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logger.error(f"Unhandled exception: {str(e)}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+    return jsonify({
+        "error": "Internal server error",
+        "message": str(e),
+        "type": type(e).__name__
+    }), 500
+
+# Request logging middleware
+@app.before_request
+def log_request_info():
+    logger.info('=== INCOMING REQUEST ===')
+    logger.info(f'Method: {request.method}')
+    logger.info(f'URL: {request.url}')
+    logger.info(f'Remote Address: {request.remote_addr}')
+    logger.info(f'User Agent: {request.headers.get("User-Agent")}')
+    logger.info(f'Content Type: {request.headers.get("Content-Type")}')
+    if request.method in ['POST', 'PUT', 'PATCH']:
+        logger.info(f'Content Length: {request.headers.get("Content-Length")}')
+
+@app.after_request
+def log_response_info(response):
+    logger.info(f'Response Status: {response.status_code}')
+    logger.info('=== REQUEST COMPLETED ===')
+    return response
 
 # Configure Gemini AI
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-lite')
 GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.1'))
 
+logger.info(f"Gemini Model: {GEMINI_MODEL}")
+logger.info(f"Gemini Temperature: {GEMINI_TEMPERATURE}")
+logger.info(f"API Key present: {'Yes' if GEMINI_API_KEY else 'No'}")
+logger.info(f"API Key length: {len(GEMINI_API_KEY) if GEMINI_API_KEY else 0}")
+
 # Rate limiting for Gemini 2.5 Flash Lite (15 RPM)
 RATE_LIMIT_RPM = 15
 RATE_LIMIT_INTERVAL = 60.0 / RATE_LIMIT_RPM  # 4 seconds between requests
 
-if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == '':
-    raise ValueError("GEMINI_API_KEY not found in .env file. Please add your API key.")
+@app.route('/test', methods=['GET'])
+def test_api():
+    """Test endpoint to verify API is working"""
+    logger.info("Test API endpoint called")
+    return jsonify({
+        "status": "API is working!",
+        "gemini_key_exists": bool(GEMINI_API_KEY),
+        "timestamp": time.time()
+    })
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(GEMINI_MODEL)
+if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == '':
+    error_msg = "GEMINI_API_KEY not found in environment variables"
+    logger.error(error_msg)
+    raise ValueError(error_msg)
+
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel(GEMINI_MODEL)
+    logger.info("Gemini AI configured successfully")
+except Exception as e:
+    logger.error(f"Failed to configure Gemini AI: {str(e)}")
+    raise
 
 # Rate limiting mechanism
 class RateLimiter:
@@ -300,26 +364,45 @@ def create_empty_result():
         'quantity': 1
     }
 
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint for API"""
+    return jsonify({
+        "message": "Packing Slip Parser API",
+        "status": "running",
+        "endpoints": ["/health", "/upload", "/test-ai"]
+    })
+
 @app.route('/upload', methods=['POST'])
 def upload_pdf():
+    logger.info("=== UPLOAD ENDPOINT CALLED ===")
     try:
+        logger.info(f"Request method: {request.method}")
+        logger.info(f"Request files: {list(request.files.keys())}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        
         if 'file' not in request.files:
+            logger.error("No file provided in request")
             return jsonify({"error": "No file provided"}), 400
         
         pdf_file = request.files['file']
+        logger.info(f"File received: {pdf_file.filename}")
+        
         if pdf_file.filename == '':
+            logger.error("Empty filename received")
             return jsonify({"error": "No file selected"}), 400
         
         if not pdf_file.filename.lower().endswith('.pdf'):
+            logger.error(f"Invalid file type: {pdf_file.filename}")
             return jsonify({"error": "File must be a PDF"}), 400
         
-        print(f"Processing PDF: {pdf_file.filename}")
+        logger.info(f"Processing PDF: {pdf_file.filename}")
         
         # Extract all text from PDF first
         pages_text = []
         with pdfplumber.open(pdf_file.stream) as pdf:
             total_pages = len(pdf.pages)
-            print(f"Total pages in PDF: {total_pages}")
+            logger.info(f"Total pages in PDF: {total_pages}")
             
             for i, page in enumerate(pdf.pages):
                 try:
@@ -366,29 +449,35 @@ def upload_pdf():
         for record in records:
             record.pop('page_number', None)
         
-        # Create CSV
-        df = pd.DataFrame(records)
+        # Add calculated fields using native Python
+        for record in records:
+            record['packages'] = record['quantity'] * 2
+            record['packageWeight'] = '4.5kg'
+            record['type'] = '24 Pack'
+            record['totalWeight'] = str(record['quantity'] * 9) + 'kg'  # 4.5kg * 2 packages = 9kg per quantity
+            record['shipper'] = 'K100C4'
+            record['billTransportationTo'] = 'shipper'
+            record['countryTerritory'] = 'Canada'
         
-        # Calculate packages (2 * quantity) and total weight
-        df['packages'] = df['quantity'] * 2
-        df['packageWeight'] = '4.5kg'
-        df['type'] = '24 Pack'
-        df['totalWeight'] = (df['quantity'] * 9).astype(str) + 'kg'  # 4.5kg * 2 packages = 9kg per quantity
-        df['shipper'] = 'K100C4'
-        df['billTransportationTo'] = 'shipper'
-        df['countryTerritory'] = 'Canada'
-        
-        # Reorder columns to match reference CSV
+        # Define column order to match reference CSV
         column_order = ['customerId', 'companyName', 'attention', 'address1', 
                        'stateProvinceCounty', 'countryTerritory', 'postalCode', 
                        'cityOrTown', 'telephone', 'upsService', 'packages', 
                        'packageWeight', 'type', 'totalWeight', 'shipper', 'billTransportationTo']
         
-        df = df.reindex(columns=column_order, fill_value='Not found')
         
-        # Convert to CSV
+        # Create CSV using native Python csv module
         output = io.StringIO()
-        df.to_csv(output, index=False)
+        writer = csv.DictWriter(output, fieldnames=column_order, extrasaction='ignore')
+        writer.writeheader()
+        
+        # Write records, filling missing fields with 'Not found'
+        for record in records:
+            row = {}
+            for field in column_order:
+                row[field] = record.get(field, 'Not found')
+            writer.writerow(row)
+        
         output.seek(0)
         
         return send_file(
@@ -399,6 +488,8 @@ def upload_pdf():
         )
         
     except Exception as e:
+        logger.error(f"Error processing PDF: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Error processing PDF: {str(e)}"}), 500
 
 @app.route('/test-ai', methods=['POST'])
@@ -435,6 +526,7 @@ def health_check():
             "error": str(e)
         }), 500
 
+# For Render deployment
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

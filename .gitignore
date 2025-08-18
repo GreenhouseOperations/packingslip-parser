@@ -263,3 +263,4 @@ logs/
 # Runtime and temporary files
 *.tmp
 *.temp
+.vercel

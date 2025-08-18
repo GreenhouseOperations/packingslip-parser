@@ -43,8 +43,10 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
 
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
     try {
-      const response = await fetch('/upload', { 
+      const response = await fetch(`${API_URL}/upload`, { 
         method: 'POST', 
         body: formData 
       });
