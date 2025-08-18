@@ -139,32 +139,29 @@ def parse_multiple_packing_slips_batch(pages_text_list):
     
     # Create batch prompt with all packing slips
     batch_prompt = """
-You are an expert data extraction system for Canadian packing slips with SIDE-BY-SIDE format. Each line contains SHIP TO info (LEFT) and SOLD TO info (RIGHT).
+You are an expert data extraction system for Canadian packing slips. Extract shipping information only, ignoring billing information.
 
-CRITICAL: ONLY extract information from the LEFT SIDE of each line (SHIP TO). IGNORE the RIGHT SIDE (SOLD TO).
-
-For each packing slip, extract these fields FROM THE LEFT COLUMN ONLY:
+For each packing slip, extract these fields:
 {
-    "customerId": "10-digit customer number from pattern [14-digit] [10-digit] [date]",
-    "companyName": "Company name from left column, or person's name if no company found",
-    "attention": "Person's name from left column (first and last name)",
-    "address1": "Street address from left column with apartment/unit if present",
-    "cityOrTown": "City name from left column only",
-    "stateProvinceCounty": "2-letter province code from left column",
-    "postalCode": "Canadian postal code from left column in format A1A1A1 (no spaces)",
-    "telephone": "10-digit phone number from left column",
+    "customerId": "10-digit customer number (NOT the purchase order number)",
+    "companyName": "Company name if present, otherwise use person's name",
+    "attention": "Person's name (first and last name)",
+    "address1": "Street address with apartment/unit if present",
+    "cityOrTown": "City name only",
+    "stateProvinceCounty": "2-letter province code",
+    "postalCode": "Canadian postal code in format A1A1A1 (no spaces)",
+    "telephone": "10-digit phone number",
     "upsService": "UPS Express Saver",
     "quantity": "Number from 'X GINGER DEFENCE' line"
 }
 
-CRITICAL SIDE-BY-SIDE PARSING RULES:
-1. Customer ID: From line like "00894004912114 1217114929 08/13/2025" - extract middle 10-digit number (1217114929)
-2. Name splitting: "Jane Luis Joel De sousa" → take ONLY "Jane Luis" (left side)
-3. Address splitting: "919-5233 DUNDAS ST W 587 saint clarens ave" → take ONLY "919-5233 DUNDAS ST W" (left side)
-4. City splitting: "ETOBICOKE, ON M9B 6M1 Basement stairs" → take ONLY "ETOBICOKE, ON M9B 6M1" (left side)
-5. Phone splitting: "416-509-1667 Toronto, ON M6H 3W8" → take ONLY "416-509-1667" (left side)
-6. ALWAYS take the FIRST part of each line before any obvious break/second address/name
-7. Postal Code: Remove spaces from format like "M9B 6M1" → "M9B6M1"
+EXTRACTION RULES:
+1. SHIP TO ONLY: Extract data only from shipping information, ignore billing/sold-to information
+2. Customer ID: Look for pattern with 14-digit number followed by 10-digit number and date - extract the 10-digit number
+3. Side-by-side format: If data appears in columns, extract from the left column (shipping) only
+4. Postal Code: Remove spaces from Canadian postal codes
+5. Company vs Person: Use company name if present, otherwise use person's name for companyName
+6. Quantity: Extract number from product line mentioning GINGER DEFENCE
 
 Return ONLY a JSON array: [{"customerId": "...", ...}, {"customerId": "...", ...}]
 
@@ -266,38 +263,34 @@ def parse_packing_slip_with_ai(text):
     Parse packing slip using Gemini AI for 100% accuracy
     """
     prompt = f"""
-You are an expert data extraction system for Canadian packing slips with SIDE-BY-SIDE format. Each line contains SHIP TO info (LEFT) and SOLD TO info (RIGHT).
-
-CRITICAL: ONLY extract information from the LEFT SIDE of each line (SHIP TO). IGNORE the RIGHT SIDE (SOLD TO).
+You are an expert data extraction system for Canadian packing slips. Extract shipping information only, ignoring billing information.
 
 PACKING SLIP TEXT:
 {text}
 
-Extract these exact fields FROM THE LEFT COLUMN ONLY and return ONLY a valid JSON object:
+Extract these fields and return ONLY a valid JSON object:
 
 {{
-    "customerId": "10-digit customer number from pattern [14-digit] [10-digit] [date]",
-    "companyName": "Company name from left column, or person's name if no company found",
-    "attention": "Person's name from left column (first and last name)",
-    "address1": "Street address from left column with apartment/unit if present",
-    "cityOrTown": "City name from left column only",
-    "stateProvinceCounty": "2-letter province code from left column",
-    "postalCode": "Canadian postal code from left column in format A1A1A1 (no spaces)",
-    "telephone": "10-digit phone number from left column",
+    "customerId": "10-digit customer number (NOT the purchase order number)",
+    "companyName": "Company name if present, otherwise use person's name",
+    "attention": "Person's name (first and last name)",
+    "address1": "Street address with apartment/unit if present",
+    "cityOrTown": "City name only",
+    "stateProvinceCounty": "2-letter province code",
+    "postalCode": "Canadian postal code in format A1A1A1 (no spaces)",
+    "telephone": "10-digit phone number",
     "upsService": "UPS Express Saver",
     "quantity": "Number from 'X GINGER DEFENCE' line"
 }}
 
-CRITICAL SIDE-BY-SIDE PARSING RULES:
-1. Customer ID: From line like "00894004912114 1217114929 08/13/2025" - extract middle 10-digit number (1217114929)
-2. Name splitting: "Jane Luis Joel De sousa" → take ONLY "Jane Luis" (left side)
-3. Address splitting: "919-5233 DUNDAS ST W 587 saint clarens ave" → take ONLY "919-5233 DUNDAS ST W" (left side)
-4. City splitting: "ETOBICOKE, ON M9B 6M1 Basement stairs" → take ONLY "ETOBICOKE, ON M9B 6M1" (left side)
-5. Phone splitting: "416-509-1667 Toronto, ON M6H 3W8" → take ONLY "416-509-1667" (left side)
-6. ALWAYS take the FIRST part of each line before any obvious break/second address/name
-7. Postal Code: Remove spaces from format like "M9B 6M1" → "M9B6M1"
-8. Quantity: Look for "X GINGER DEFENCE" where X is the quantity number
-9. If any field cannot be found in left column, use "Not found"
+EXTRACTION RULES:
+1. SHIP TO ONLY: Extract data only from shipping information, ignore billing/sold-to information
+2. Customer ID: Look for pattern with 14-digit number followed by 10-digit number and date - extract the 10-digit number
+3. Side-by-side format: If data appears in columns, extract from the left column (shipping) only
+4. Postal Code: Remove spaces from Canadian postal codes
+5. Company vs Person: Use company name if present, otherwise use person's name for companyName
+6. Quantity: Extract number from product line mentioning GINGER DEFENCE
+7. If any field cannot be found, use "Not found"
 
 Return ONLY the JSON object, no other text.
 """
