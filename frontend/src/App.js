@@ -62,12 +62,14 @@ function App() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       } else {
-        const error = await response.json();
-        alert(`Error: ${error.error}`);
+        console.error('Response not ok:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response body:', errorText);
+        alert(`Error: ${response.status} - ${response.statusText}`);
       }
     } catch (error) {
-      alert('Error uploading file. Please try again.');
-      console.error('Upload error:', error);
+      console.error('Upload error details:', error);
+      alert(`Error uploading file: ${error.message}. Please try again.`);
     } finally {
       setIsLoading(false);
     }
