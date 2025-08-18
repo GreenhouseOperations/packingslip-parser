@@ -141,25 +141,26 @@ def parse_multiple_packing_slips_batch(pages_text_list):
     batch_prompt = """
 You are an expert data extraction system for Canadian packing slips. Process ALL packing slips below and return a JSON array with one object per packing slip.
 
-For each packing slip, extract these fields:
+For each packing slip, extract these fields FROM THE "SHIP TO" SECTION ONLY:
 {
     "customerId": "10-digit customer number (NOT purchase order number)",
-    "companyName": "Company name if present, otherwise use person's name",
-    "attention": "Person's name (first and last name)",
-    "address1": "Street address with apartment/unit/buzzer if present",
-    "cityOrTown": "City name only (e.g., 'Red Deer', 'East St Paul', 'North York')",
-    "stateProvinceCounty": "2-letter province code (e.g., 'ON', 'BC', 'AB')",
-    "postalCode": "Canadian postal code in format A1A1A1 (no spaces)",
-    "telephone": "10-digit phone number",
+    "companyName": "Company name if present in SHIP TO section, otherwise use person's name from SHIP TO",
+    "attention": "Person's name from SHIP TO section (first and last name)",
+    "address1": "Street address from SHIP TO section with apartment/unit/buzzer if present",
+    "cityOrTown": "City name from SHIP TO section only (e.g., 'Red Deer', 'East St Paul', 'North York')",
+    "stateProvinceCounty": "2-letter province code from SHIP TO section (e.g., 'ON', 'BC', 'AB')",
+    "postalCode": "Canadian postal code from SHIP TO section in format A1A1A1 (no spaces)",
+    "telephone": "10-digit phone number from SHIP TO section",
     "upsService": "UPS service type (usually 'UPS Express Saver')",
     "quantity": 1
 }
 
 CRITICAL EXTRACTION RULES:
-1. Customer ID: Look for "14-digit-number 10-digit-number dd/dd/yyyy" - extract ONLY the 10-digit middle number
-2. Company: If no business name found, use person's name
-3. Address: Include apt/unit/buzzer in address1
-4. Quantity: Look for "X GINGER DEFENCE" where X is the quantity
+1. ONLY USE DATA FROM "SHIP TO" SECTION - IGNORE "SOLD TO" OR "BILL TO" SECTIONS COMPLETELY
+2. Customer ID: Look for "14-digit-number 10-digit-number dd/dd/yyyy" - extract ONLY the 10-digit middle number
+3. Company: If no business name found in SHIP TO section, use person's name from SHIP TO section
+4. Address: Include apt/unit/buzzer in address1 from SHIP TO section only
+5. Quantity: Look for "X GINGER DEFENCE" where X is the quantity
 
 Return ONLY a JSON array: [{"customerId": "...", ...}, {"customerId": "...", ...}]
 
@@ -261,36 +262,39 @@ def parse_packing_slip_with_ai(text):
     Parse packing slip using Gemini AI for 100% accuracy
     """
     prompt = f"""
-You are an expert data extraction system for Canadian packing slips. Extract the following information from this packing slip text with 100% accuracy:
+You are an expert data extraction system for Canadian packing slips. Extract the following information from this packing slip text with 100% accuracy.
+
+IMPORTANT: ONLY extract information from the "SHIP TO" section. IGNORE any "SOLD TO" or "BILL TO" sections completely.
 
 PACKING SLIP TEXT:
 {text}
 
-Extract these exact fields and return ONLY a valid JSON object:
+Extract these exact fields FROM THE "SHIP TO" SECTION ONLY and return ONLY a valid JSON object:
 
 {{
     "customerId": "10-digit customer number (NOT purchase order number)",
-    "companyName": "Company name if present, otherwise same as attention",
-    "attention": "Person's name (first and last name)",
-    "address1": "Street address with apartment/unit/buzzer if present",
-    "cityOrTown": "City name only (e.g., 'Red Deer', 'East St Paul', 'North York')",
-    "stateProvinceCounty": "2-letter province code (e.g., 'ON', 'BC', 'AB')",
-    "postalCode": "Canadian postal code in format A1A1A1 (no spaces)",
-    "telephone": "10-digit phone number",
+    "companyName": "Company name if present in SHIP TO section, otherwise same as attention from SHIP TO",
+    "attention": "Person's name from SHIP TO section (first and last name)",
+    "address1": "Street address from SHIP TO section with apartment/unit/buzzer if present",
+    "cityOrTown": "City name from SHIP TO section only (e.g., 'Red Deer', 'East St Paul', 'North York')",
+    "stateProvinceCounty": "2-letter province code from SHIP TO section (e.g., 'ON', 'BC', 'AB')",
+    "postalCode": "Canadian postal code from SHIP TO section in format A1A1A1 (no spaces)",
+    "telephone": "10-digit phone number from SHIP TO section",
     "upsService": "UPS service type (usually 'UPS Express Saver')",
     "quantity": 1
 }}
 
 CRITICAL EXTRACTION RULES:
-1. Customer ID: Look for the pattern "14-digit-number 10-digit-number dd/dd/yyyy" - extract ONLY the 10-digit middle number, NOT the purchase order number
+1. ONLY USE DATA FROM "SHIP TO" SECTION - COMPLETELY IGNORE "SOLD TO" OR "BILL TO" SECTIONS
+2. Customer ID: Look for the pattern "14-digit-number 10-digit-number dd/dd/yyyy" - extract ONLY the 10-digit middle number, NOT the purchase order number
    Example: "12345678901234 1214327946 01/15/2025" → customerId should be "1214327946"
-2. Company vs Person: If text contains "Ltd", "Inc", "Corp", "Construction", "Company" - that's the company name. If NO company is found, use the person's name for companyName
-3. Address: Include apartment numbers, unit numbers, buzzer codes in address1
-4. City: Extract only the city name, not street parts (e.g., "HENDERSON HWY EAST ST PAUL" → city is "EAST ST PAUL")
-5. Phone: 10-digit Canadian format, may have dashes or spaces
-6. Postal Code: Canadian format like "A1A 1A1" - remove spaces for output
-7. Quantity: Look for "X GINGER DEFENCE" where X is the quantity number
-8. If any field cannot be found, use "Not found"
+3. Company vs Person: If SHIP TO section contains "Ltd", "Inc", "Corp", "Construction", "Company" - that's the company name. If NO company is found in SHIP TO, use the person's name from SHIP TO for companyName
+4. Address: Include apartment numbers, unit numbers, buzzer codes from SHIP TO section in address1
+5. City: Extract only the city name from SHIP TO section, not street parts (e.g., "HENDERSON HWY EAST ST PAUL" → city is "EAST ST PAUL")
+6. Phone: 10-digit Canadian format from SHIP TO section, may have dashes or spaces
+7. Postal Code: Canadian format like "A1A 1A1" from SHIP TO section - remove spaces for output
+8. Quantity: Look for "X GINGER DEFENCE" where X is the quantity number
+9. If any field cannot be found in SHIP TO section, use "Not found"
 
 Return ONLY the JSON object, no other text.
 """
