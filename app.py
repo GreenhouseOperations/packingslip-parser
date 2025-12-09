@@ -381,11 +381,13 @@ Extract the following fields:
 1. Greenhouse Juice internal order number (GHSO): Look for "Quote No." or "GHSO-"
 2. Reference Number: Look for "Customer Reference"
 3. Required by Date: Look for "Required By Date"
-4. Address: Extract the full "Ship To" address as a single string (replace newlines with spaces)
+4. Address Components: Extract the "Ship To" address components:
+    - Address (Street Address + City)
+    - State (State/Province)
+    - Postal Code (Zip/Postal Code)
 5. Items: Extract all line items in the table. For each item extract:
     - SKU
-    - Product (Product Name)
-    - description (Description if separate, otherwise same as Product)
+    - Product Description (Combine Product Name and Description)
     - Quantity
 
 Return ONLY a valid JSON object with this structure:
@@ -394,11 +396,12 @@ Return ONLY a valid JSON object with this structure:
     "referenceNumber": "...",
     "requiredByDate": "...",
     "address": "...",
+    "state": "...",
+    "postalCode": "...",
     "items": [
         {{
             "sku": "...",
-            "product": "...",
-            "description": "...",
+            "productDescription": "...",
             "quantity": "..."
         }}
     ]
@@ -499,7 +502,7 @@ def upload_pdf():
             output = io.StringIO()
             
             # Section 1 Headers
-            output.write("Greenhouse Juice internal order number (GHSO),Reference Number,Required by Date,Address\n")
+            output.write("Greenhouse Juice internal order number (GHSO),Reference Number,Required by Date,Address,State,Postal Code\n")
             
             # Section 1 Data
             # Escape fields that might contain commas
@@ -512,7 +515,9 @@ def upload_pdf():
                 escape_csv(data.get('ghso', '')),
                 escape_csv(data.get('referenceNumber', '')),
                 escape_csv(data.get('requiredByDate', '')),
-                escape_csv(data.get('address', ''))
+                escape_csv(data.get('address', '')),
+                escape_csv(data.get('state', '')),
+                escape_csv(data.get('postalCode', ''))
             ]
             output.write(",".join(row1) + "\n")
             
@@ -520,14 +525,13 @@ def upload_pdf():
             output.write("\n")
             
             # Section 2 Headers
-            output.write("SKU,Product,description,Quantity\n")
+            output.write("SKU,Product Description,Quantity\n")
             
             # Section 2 Data
             for item in data.get('items', []):
                 row2 = [
                     escape_csv(item.get('sku', '')),
-                    escape_csv(item.get('product', '')),
-                    escape_csv(item.get('description', '')),
+                    escape_csv(item.get('productDescription', '')),
                     escape_csv(item.get('quantity', ''))
                 ]
                 output.write(",".join(row2) + "\n")
