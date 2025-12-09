@@ -151,8 +151,9 @@ For each packing slip, extract these fields:
     "stateProvinceCounty": "2-letter province code",
     "postalCode": "Canadian postal code in format A1A1A1 (no spaces)",
     "telephone": "10-digit phone number",
-    "upsService": "UPS Express Saver",
-    "quantity": "Number from 'X GINGER DEFENCE' line"
+    "upsService": "UPS Standard",
+    "quantity": "Number from 'X GINGER DEFENCE' line",
+    "poNumber": "Purchase Order Number"
 }
 
 EXTRACTION RULES:
@@ -207,7 +208,7 @@ PACKING SLIPS TO PROCESS:
                 # Ensure all required fields are present
                 required_fields = ['customerId', 'companyName', 'attention', 'address1', 
                                   'cityOrTown', 'stateProvinceCounty', 'postalCode', 
-                                  'telephone', 'upsService', 'quantity']
+                                  'telephone', 'upsService', 'quantity', 'poNumber']
                 
                 for field in required_fields:
                     if field not in result:
@@ -279,8 +280,9 @@ Extract these fields and return ONLY a valid JSON object:
     "stateProvinceCounty": "2-letter province code",
     "postalCode": "Canadian postal code in format A1A1A1 (no spaces)",
     "telephone": "10-digit phone number",
-    "upsService": "UPS Express Saver",
-    "quantity": "Number from 'X GINGER DEFENCE' line"
+    "upsService": "UPS Standard",
+    "quantity": "Number from 'X GINGER DEFENCE' line",
+    "poNumber": "Purchase Order Number"
 }}
 
 EXTRACTION RULES:
@@ -322,7 +324,7 @@ Return ONLY the JSON object, no other text.
         # Ensure all required fields are present
         required_fields = ['customerId', 'companyName', 'attention', 'address1', 
                           'cityOrTown', 'stateProvinceCounty', 'postalCode', 
-                          'telephone', 'upsService', 'quantity']
+                          'telephone', 'upsService', 'quantity', 'poNumber']
         
         for field in required_fields:
             if field not in result:
@@ -361,8 +363,72 @@ def create_empty_result():
         'postalCode': 'Not found',
         'telephone': 'Not found',
         'upsService': 'Not found',
-        'quantity': 1
+        'quantity': 1,
+        'poNumber': 'Not found'
     }
+
+def parse_sales_order(text):
+    """
+    Parse Sales Order using Gemini AI
+    """
+    prompt = f"""
+You are an expert data extraction system for Sales Orders.
+
+SALES ORDER TEXT:
+{text}
+
+Extract the following fields:
+1. Greenhouse Juice internal order number (GHSO): Look for "Quote No." or "GHSO-"
+2. Reference Number: Look for "Customer Reference"
+3. Required by Date: Look for "Required By Date"
+4. Address: Extract the full "Ship To" address as a single string (replace newlines with spaces)
+5. Items: Extract all line items in the table. For each item extract:
+    - SKU
+    - Product (Product Name)
+    - description (Description if separate, otherwise same as Product)
+    - Quantity
+
+Return ONLY a valid JSON object with this structure:
+{{
+    "ghso": "...",
+    "referenceNumber": "...",
+    "requiredByDate": "...",
+    "address": "...",
+    "items": [
+        {{
+            "sku": "...",
+            "product": "...",
+            "description": "...",
+            "quantity": "..."
+        }}
+    ]
+}}
+"""
+
+    try:
+        # Apply rate limiting
+        rate_limiter.wait_if_needed()
+        
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                temperature=GEMINI_TEMPERATURE,
+                max_output_tokens=2000,
+            )
+        )
+        
+        response_text = response.text.strip()
+        
+        if response_text.startswith('```json'):
+            response_text = response_text[7:-3]
+        elif response_text.startswith('```'):
+            response_text = response_text[3:-3]
+            
+        return json.loads(response_text)
+        
+    except Exception as e:
+        logger.error(f"Error parsing sales order: {str(e)}")
+        raise
 
 @app.route('/', methods=['GET'])
 def root():
@@ -418,73 +484,129 @@ def upload_pdf():
         
         print(f"Found text on {len(pages_text)} pages")
         
-        # Use batch processing for faster results
-        # Process in batches of 10 packing slips per API call
-        batch_size = 10
-        records = []
+        # Check document type based on first page text
+        first_page_text = pages_text[0][1] if pages_text else ""
+        is_sales_order = "SALE ORDER" in first_page_text or "Quote No." in first_page_text
         
-        total_batches = (len(pages_text) + batch_size - 1) // batch_size
-        print(f"Processing {len(pages_text)} pages in {total_batches} batches of up to {batch_size} pages each")
-        
-        for i in range(0, len(pages_text), batch_size):
-            batch = pages_text[i:i + batch_size]
-            batch_num = i // batch_size + 1
+        if is_sales_order:
+            logger.info("Detected Sales Order")
             
-            print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} pages)")
+            # Process as Sales Order (usually single document)
+            full_text = "\n".join([text for _, text in pages_text])
+            data = parse_sales_order(full_text)
             
-            # Use batch processing
-            batch_results = parse_multiple_packing_slips_batch(batch)
-            records.extend(batch_results)
+            # Create special CSV format for Sales Order
+            output = io.StringIO()
             
-            # Progress update
-            processed_pages = min(i + batch_size, len(pages_text))
-            print(f"Completed batch {batch_num}: {len(batch_results)} records found. Total processed: {processed_pages}/{len(pages_text)} pages, {len(records)} total records")
-        
-        if not records:
-            return jsonify({"error": "No valid packing slip data found in PDF"}), 400
-        
-        print(f"Final result: {len(records)} valid records extracted from {len(pages_text)} pages")
-        
-        # Remove page_number before creating CSV
-        for record in records:
-            record.pop('page_number', None)
-        
-        # Add calculated fields using native Python
-        for record in records:
-            record['packages'] = record['quantity'] * 2
-            record['packageWeight'] = '4.5kg'
-            record['type'] = '24 Pack'
-            record['totalWeight'] = str(record['quantity'] * 9) + 'kg'  # 4.5kg * 2 packages = 9kg per quantity
-            record['shipper'] = 'K100C4'
-            record['billTransportationTo'] = 'shipper'
-            record['countryTerritory'] = 'Canada'
-        
-        # Define column order to match reference CSV
-        column_order = ['customerId', 'companyName', 'attention', 'address1', 
-                       'stateProvinceCounty', 'countryTerritory', 'postalCode', 
-                       'cityOrTown', 'telephone', 'upsService', 'packages', 
-                       'packageWeight', 'type', 'totalWeight', 'shipper', 'billTransportationTo']
-        
-        
-        # Create CSV using native Python csv module
-        output = io.StringIO()
-        writer = csv.DictWriter(output, fieldnames=column_order, extrasaction='ignore')
-        writer.writeheader()
-        
-        # Write records, filling missing fields with 'Not found'
-        for record in records:
-            row = {}
-            for field in column_order:
-                row[field] = record.get(field, 'Not found')
-            writer.writerow(row)
-        
-        output.seek(0)
+            # Section 1 Headers
+            output.write("Greenhouse Juice internal order number (GHSO),Reference Number,Required by Date,Address\n")
+            
+            # Section 1 Data
+            # Escape fields that might contain commas
+            def escape_csv(val):
+                if val and (',' in str(val) or '"' in str(val) or '\n' in str(val)):
+                    return f'"{str(val).replace("\"", "\"\"")}"'
+                return str(val) if val else ""
+
+            row1 = [
+                escape_csv(data.get('ghso', '')),
+                escape_csv(data.get('referenceNumber', '')),
+                escape_csv(data.get('requiredByDate', '')),
+                escape_csv(data.get('address', ''))
+            ]
+            output.write(",".join(row1) + "\n")
+            
+            # Empty line
+            output.write("\n")
+            
+            # Section 2 Headers
+            output.write("SKU,Product,description,Quantity\n")
+            
+            # Section 2 Data
+            for item in data.get('items', []):
+                row2 = [
+                    escape_csv(item.get('sku', '')),
+                    escape_csv(item.get('product', '')),
+                    escape_csv(item.get('description', '')),
+                    escape_csv(item.get('quantity', ''))
+                ]
+                output.write(",".join(row2) + "\n")
+            
+            output.seek(0)
+            download_name = 'sales_order_data.csv'
+            
+        else:
+            logger.info("Detected Packing Slip(s)")
+            
+            # Use batch processing for faster results
+            # Process in batches of 10 packing slips per API call
+            batch_size = 10
+            records = []
+            
+            total_batches = (len(pages_text) + batch_size - 1) // batch_size
+            print(f"Processing {len(pages_text)} pages in {total_batches} batches of up to {batch_size} pages each")
+            
+            for i in range(0, len(pages_text), batch_size):
+                batch = pages_text[i:i + batch_size]
+                batch_num = i // batch_size + 1
+                
+                print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} pages)")
+                
+                # Use batch processing
+                batch_results = parse_multiple_packing_slips_batch(batch)
+                records.extend(batch_results)
+                
+                # Progress update
+                processed_pages = min(i + batch_size, len(pages_text))
+                print(f"Completed batch {batch_num}: {len(batch_results)} records found. Total processed: {processed_pages}/{len(pages_text)} pages, {len(records)} total records")
+            
+            if not records:
+                return jsonify({"error": "No valid packing slip data found in PDF"}), 400
+            
+            print(f"Final result: {len(records)} valid records extracted from {len(pages_text)} pages")
+            
+            # Remove page_number before creating CSV
+            for record in records:
+                record.pop('page_number', None)
+            
+            # Add calculated fields using native Python
+            for record in records:
+                record['packages'] = record['quantity'] * 2
+                record['packageWeight'] = '5kg'
+                record['type'] = '24 Pack'
+                record['totalWeight'] = str(record['quantity'] * 10) + 'kg'  # 5kg * 2 packages = 10kg per quantity
+                record['shipper'] = 'K100C4'
+                record['billTransportationTo'] = 'shipper'
+                record['countryTerritory'] = 'Canada'
+                record['referenceNumber1'] = record.get('poNumber', 'Not found')
+            
+            # Define column order to match reference CSV
+            column_order = ['customerId', 'companyName', 'attention', 'address1', 
+                           'stateProvinceCounty', 'countryTerritory', 'postalCode', 
+                           'cityOrTown', 'telephone', 'upsService', 'packages', 
+                           'packageWeight', 'type', 'totalWeight', 'shipper', 'billTransportationTo', 'referenceNumber1']
+            
+            
+            # Create CSV using native Python csv module
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=column_order, extrasaction='ignore')
+            writer.writeheader()
+            
+            # Write records, filling missing fields with 'Not found'
+            for record in records:
+                row = {}
+                for field in column_order:
+                    row[field] = record.get(field, 'Not found')
+                writer.writerow(row)
+            
+            output.seek(0)
+            download_name = 'packing_slip_data.csv'
         
         return send_file(
             io.BytesIO(output.getvalue().encode()),
             mimetype='text/csv',
             as_attachment=True,
-            download_name='packing_slip_data.csv'
+            download_name=download_name
         )
         
     except Exception as e:

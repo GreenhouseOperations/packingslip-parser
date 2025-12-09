@@ -46,17 +46,27 @@ function App() {
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
     try {
-      const response = await fetch(`${API_URL}/upload`, { 
-        method: 'POST', 
-        body: formData 
+      const response = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        body: formData
       });
 
       if (response.ok) {
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'parsed_data.csv';
+        if (contentDisposition && contentDisposition.indexOf('attachment') !== -1) {
+          const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+          const matches = filenameRegex.exec(contentDisposition);
+          if (matches != null && matches[1]) {
+            filename = matches[1].replace(/['"]/g, '');
+          }
+        }
+
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'packing_slips_v4.csv';
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -79,15 +89,15 @@ function App() {
     <div className="app">
       <div className="container">
         <div className="hero-section">
-          <h1>Packing Slip Parser</h1>
-          <p className="subtitle">Convert PDF packing slips to structured CSV data</p>
+          <h1>Document Parser</h1>
+          <p className="subtitle">Convert PDF packing slips and sales orders to structured CSV data</p>
           <p className="description">
-            Upload your PDF packing slip and receive a properly formatted CSV file for your operations system.
+            Upload your PDF packing slip or sales order and receive a properly formatted CSV file for your operations system.
           </p>
         </div>
-        
+
         <div className="upload-section">
-          <div 
+          <div
             className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -100,7 +110,7 @@ function App() {
               </div>
             ) : (
               <div className="drop-message">
-                <p>Drop your PDF packing slip here</p>
+                <p>Drop your PDF file here</p>
                 <p className="or-text">or</p>
                 <input
                   type="file"
@@ -117,8 +127,8 @@ function App() {
           </div>
 
           <div className="actions">
-            <button 
-              onClick={handleUpload} 
+            <button
+              onClick={handleUpload}
               disabled={!file || isLoading}
               className="primary-button"
             >
@@ -131,9 +141,9 @@ function App() {
                 'Generate CSV'
               )}
             </button>
-            
+
             {file && (
-              <button 
+              <button
                 onClick={() => setFile(null)}
                 className="secondary-button"
               >
@@ -143,7 +153,7 @@ function App() {
           </div>
         </div>
       </div>
-      
+
       {/* Watermark */}
       <div className="watermark">
         Made by Dawang
