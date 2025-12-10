@@ -29,7 +29,7 @@ load_dotenv()
 logger.info("Loading environment variables...")
 
 app = Flask(__name__)
-CORS(app, origins=["https://packingslip-parser.vercel.app", "http://localhost:3000", "*"])
+CORS(app, origins=["https://packingslip-parser.vercel.app", "http://localhost:3000", "*"], expose_headers=["Content-Disposition"])
 logger.info("Flask app initialized with CORS")
 
 # Global error handler
