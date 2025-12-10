@@ -378,20 +378,22 @@ SALES ORDER TEXT:
 {text}
 
 Extract the following fields:
-1. Greenhouse Juice internal order number (GHSO): Look for "Quote No." or "GHSO-"
-2. Reference Number: Look for "Customer Reference"
-3. Required by Date: Look for "Required By Date"
-4. Address Components: Extract the "Ship To" address components:
+1. Customer Name: Look for the name of the customer, often under "Sold To" or at the top.
+2. Greenhouse Juice internal order number (GHSO): Look for "Quote No." or "GHSO-"
+3. Reference Number: Look for "Customer Reference"
+4. Required by Date: Look for "Required By Date"
+5. Address Components: Extract the "Ship To" address components:
     - Address (Street Address + City)
     - State (State/Province)
     - Postal Code (Zip/Postal Code)
-5. Items: Extract all line items in the table. For each item extract:
+6. Items: Extract all line items in the table. For each item extract:
     - SKU
     - Product Description (Combine Product Name and Description)
     - Quantity
 
 Return ONLY a valid JSON object with this structure:
 {{
+    "customerName": "...",
     "ghso": "...",
     "referenceNumber": "...",
     "requiredByDate": "...",
@@ -502,7 +504,7 @@ def upload_pdf():
             output = io.StringIO()
             
             # Section 1 Headers
-            output.write("Greenhouse Juice internal order number (GHSO),Reference Number,Required by Date,Address,State,Postal Code\n")
+            output.write("Customer Name,Greenhouse Juice internal order number (GHSO),Reference Number,Required by Date,Address,State,Postal Code\n")
             
             # Section 1 Data
             # Escape fields that might contain commas
@@ -512,6 +514,7 @@ def upload_pdf():
                 return str(val) if val else ""
 
             row1 = [
+                escape_csv(data.get('customerName', '')),
                 escape_csv(data.get('ghso', '')),
                 escape_csv(data.get('referenceNumber', '')),
                 escape_csv(data.get('requiredByDate', '')),
@@ -604,7 +607,7 @@ def upload_pdf():
                 writer.writerow(row)
             
             output.seek(0)
-            download_name = 'packing_slip_data.csv'
+            download_name = 'packing_slips_v4.csv'
         
         return send_file(
             io.BytesIO(output.getvalue().encode()),
